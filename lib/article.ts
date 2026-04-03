@@ -432,11 +432,9 @@ function soften(s: string): string {
   return s
     .replace(/\bthe stated factor\b/gi, "the factor in question")
     .replace(/\bthe described effect\b/gi, "the effects being discussed")
-    .replace(/\bthe stated outcome\b/gi, "the outcome in question")
     .replace(/\bthe claimed benefit\b/gi, "the benefits at stake")
     .replace(/\bthis argument measurably changed\b/gi, "this factor meaningfully influenced")
     .replace(/\bthe stated factor work firsthand\b/gi, "this approach work firsthand")
-    .replace(/\bthe stated factor is a meaningful driver of the stated outcome\b/gi, "the proposed cause meaningfully drives the expected outcome")
     // Deduplicate adjacent repeated phrases (e.g. "this is this is")
     .replace(/\b(this is|this reads as|it reads as|a a|an an|the the)\s+\1\b/gi, "$1")
     // Clean double articles

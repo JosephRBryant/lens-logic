@@ -273,8 +273,8 @@ function extractClaimNouns(claim: string): { subject: string; outcome: string } 
 function buildAxisFallback(analysis: AnalysisResult, claimType: string): Tension {
   const raw = extractClaimNouns(analysis.claim);
   const bothClean = isNounLike(raw.subject) && isNounLike(raw.outcome);
-  const subject = bothClean ? raw.subject : "the described factor";
-  const outcome = bothClean ? raw.outcome : "the stated outcome";
+  const subject = bothClean ? raw.subject : "the proposed cause";
+  const outcome = bothClean ? raw.outcome : "the expected outcome";
   const s = seed(analysis.claim);
   const claimLower = analysis.claim.toLowerCase();
 

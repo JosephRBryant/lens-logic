@@ -56,6 +56,24 @@ export function isNounLike(phrase: string): boolean {
   if (/\b(when|if|because|while|although|unless|until|where|whether|since)\b/i.test(phrase)) return false;
   // Pronouns signal a dependent clause
   if (/\b(they|them|their|you|your|we|our|its)\b/i.test(phrase)) return false;
+  // Predicate adjective phrases: "bad for society", "good for children",
+  // "essential for democracy" — an adjective followed by a preposition is a
+  // predicate, not a noun phrase.  Also catches bare participial adjectives
+  // ("overrated", "fundamentally flawed") and gerund predicates ("destroying
+  // the economy").
+  // Predicate adjective phrases: "bad for society", "overrated", "fundamentally
+  // flawed".  Only triggers when the adjective is the last content word (bare
+  // predicate) — "important issue" passes because a noun follows.
+  if (/^(\w+ly\s+)?(bad|good|great|essential|important|necessary|harmful|beneficial|dangerous|critical|vital|wrong|right|true|false|overrated|underrated|flawed|broken|dead|obsolete)\s*$/i.test(phrase)) return false;
+  // Gerund predicates: "destroying the economy", "ruining attention spans"
+  if (/^(\w+ly\s+)?(destroying|ruining|hurting|killing|undermining|eroding|threatening|worsening|improving|helping)\b/i.test(phrase)) return false;
+  // Object complement: "employees more productive", "workers less efficient" —
+  // a noun followed by "more/less" + adjective-suffix word is a causative
+  // complement, not a noun phrase.
+  if (/\S+\s+(more|less)\s+\w*(ive|ent|ful|ous|ant|ble|cal|tic|ate)\s*$/i.test(phrase)) return false;
+  // Adjective + preposition = predicate, not noun phrase: "bad for society",
+  // "essential for democracy".  Excludes common noun+prep phrases like "need for".
+  if (/^\w+\s+(for|to|about)\s+/i.test(phrase) && !/^(need|plan|push|bid|call|case|basis|reason|argument|time|room)\s/i.test(phrase)) return false;
   return true;
 }
 

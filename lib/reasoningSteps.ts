@@ -63,8 +63,8 @@ export function extractClaimStructure(claim: string): ClaimStructure {
         // downstream templates never get a misleading half-real pair like
         // "effect of people on the stated outcome".
         const bothClean = isNounLike(rawSubjClean) && isNounLike(rawObjClean);
-        const subject = bothClean ? rawSubjClean : "the described factor";
-        const object = bothClean ? rawObjClean : "the stated outcome";
+        const subject = bothClean ? rawSubjClean : "the proposed cause";
+        const object = bothClean ? rawObjClean : "the expected outcome";
         const concepts = [rawSubjClean, rawObjClean].filter(Boolean);
         return { subject, relation, object, concepts };
       }
@@ -77,9 +77,9 @@ export function extractClaimStructure(claim: string): ClaimStructure {
   const fbObj = fallbackConcepts[1] || "";
   const fbBothClean = !!(fbSubj && fbObj && isNounLike(fbSubj) && isNounLike(fbObj));
   return {
-    subject: fbBothClean ? fbSubj : "the described factor",
+    subject: fbBothClean ? fbSubj : "the proposed cause",
     relation: "",
-    object: fbBothClean ? fbObj : "the stated outcome",
+    object: fbBothClean ? fbObj : "the expected outcome",
     concepts: fallbackConcepts,
   };
 }
@@ -307,7 +307,7 @@ export function identifyVariables(claim: string, traits: ClaimTraits, structure:
     if (variables.length < 5) {
       variables.push(`Institutional, regulatory, or cultural resistance that could slow or redirect ${subject}`);
     }
-    if (variables.length < 5 && object !== "the stated outcome") {
+    if (variables.length < 5 && object !== "the expected outcome") {
       variables.push(`Whether "${object}" means full displacement or gradual restructuring — the scope changes the timeline`);
     }
     if (variables.length < 5) {

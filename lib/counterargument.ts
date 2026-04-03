@@ -247,20 +247,20 @@ function buildClaimLevelCounterargument(
 
   if (angle === "causality") {
     return pick([
-      `What ${ref} presents as cause and effect is more likely a sorting pattern. People with certain pre-existing traits gravitate toward certain behaviors, and those traits — not the behaviors themselves — produce the outcome. Without randomized evidence, the causal story is speculative at best.`,
+      `What ${ref} presents as cause and effect is more likely a sorting pattern. People with certain pre-existing traits gravitate toward particular activities and environments, and those traits — not the activities themselves — produce the outcome. Without randomized evidence, the causal story is speculative at best.`,
       `${ref} treats correlation as mechanism. But the observed pattern likely reflects shared underlying causes — socioeconomic background, self-selection, prior ability — rather than the direct link it implies. Strip out those confounders and the apparent effect shrinks substantially.`,
-      `The causal chain inside ${ref} skips a step. What looks like a direct mechanism is more plausibly an artifact of who self-selects into the described behavior and what other advantages they already carry. The claim credits one factor for outcomes that require an entire ecosystem.`,
+      `The causal chain inside ${ref} skips a step. What looks like a direct mechanism is more plausibly an artifact of who self-selects into the pattern the claim describes, and what other advantages they already carry. The claim credits one factor for outcomes that require an entire ecosystem.`,
     ], s, 1);
   }
   if (angle === "alternative") {
     return pick([
       `A more grounded reading of ${ref} would account for the surrounding ecosystem — motivation, access to resources, social reinforcement — rather than crediting a single factor. The claim isolates one variable from a system that doesn't operate that way.`,
-      `The most parsimonious explanation for ${ref} is self-selection, not the mechanism it highlights. People who engage with the described behavior differ systematically from those who don't, and those baseline differences do most of the explanatory work.`,
+      `The most parsimonious explanation for ${ref} is self-selection, not the mechanism it highlights. People who engage in the pattern the claim credits differ systematically from those who don't, and those baseline differences do most of the explanatory work.`,
     ], s, 2);
   }
   if (angle === "selection") {
     return pick([
-      `${ref} doesn't account for who self-selects into the described behavior. The participants aren't a representative sample — they differ in motivation, prior ability, and circumstances in ways that independently predict the outcome. The conclusion inherits that distortion without correcting for it.`,
+      `${ref} doesn't account for who self-selects into the pattern it highlights. Those who engage aren't a representative sample — they differ in motivation, prior ability, and circumstances in ways that independently predict the outcome. The conclusion inherits that distortion without correcting for it.`,
       `The evidence behind ${ref} is shaped by a filtered sample. The observed group was never randomly assigned — it consists of people whose pre-existing characteristics already predict the result. Correct for that selection and the claimed effect contracts sharply.`,
     ], s, 3);
   }
