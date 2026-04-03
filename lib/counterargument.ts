@@ -1,3 +1,4 @@
+import { isNounLike, smartLower } from "./types";
 import type { AnalysisResult } from "./types";
 
 function seed(text: string): number {
@@ -19,6 +20,7 @@ function derive(s: number, salt: number): number {
 type ClaimType = "causal" | "predictive" | "normative" | "nuanced" | "general";
 type AttackAngle = "causality" | "alternative" | "scope" | "measurement" | "selection" | "tradeoff" | "friction";
 
+
 function classType(classification: string): ClaimType {
   const c = classification.toLowerCase();
   if (/nuanced/.test(c)) return "nuanced";
@@ -31,27 +33,31 @@ function classType(classification: string): ClaimType {
 function extractNouns(claim: string): { subj: string; obj: string } {
   const cleaned = claim.replace(/[.!?]+$/, "").trim();
   const patterns: RegExp[] = [
+    // Comparative: "X plays a bigger role ... than Y", "X matters more than Y"
+    /^(.+?)\b(?:(?:plays?|has|have|had|makes?|exerts?)\s+(?:a\s+)?(?:bigger|smaller|larger|greater|lesser|more\s+\w+|less\s+\w+)\s+(?:role|impact|influence|effect|part|contribution)(?:\s+(?:in|on|to|for)\s+\S+(?:\s+\S+)*)?\s+than)\s+(.+)$/i,
+    /^(.+?)\b(?:(?:matters?|counts?|contributes?|weighs?)\s+(?:more|less)(?:\s+(?:in|to|for)\s+\S+(?:\s+\S+)*)?\s+than)\s+(.+)$/i,
     /^(.+?)\b(?:should\s+(?:be\s+)?(?:prioritized|valued|preferred)\s+(?:over|above|more than)\s+)(.+)$/i,
     /^(.+?)\b(?:should\s+(?:matter|count)\s+more\s+than\s+)(.+)$/i,
     /^(.+?)\bis\s+(?:more\s+important|better|worse)\s+than\s+(.+)$/i,
     /^(.+?)\b(?:should\s+(?:prioritize|value|prefer|choose|focus on)\s+)(.+?)(?:\s+over\s+.+)?$/i,
-    /^(.+?)\bwill\s+(?:replace|improve|reduce|increase|affect|cause|create|make|drive|produce|ruin|destroy|hurt|help|boost|eliminate|disrupt|transform)\b\s*(.+)$/i,
-    /^(.+?)\b(?:improves?|reduces?|increases?|affects?|causes?|creates?|makes?|drives?|produces?|ruins?|destroys?|hurts?|helps?|boosts?|replaces?)\b\s*(.+)$/i,
+    /^(.+?)\bwill\s+(?:\w+ly\s+)?(?:replace|improve|reduce|increase|affect|cause|create|make|drive|produce|ruin|destroy|hurt|help|boost|eliminate|disrupt|transform|change|reshape|displace|alter|redefine|revolutionize|overtake|surpass)\b\s*(.+)$/i,
+    /^(.+?)\b(?:improves?|reduces?|increases?|affects?|causes?|creates?|makes?|drives?|produces?|ruins?|destroys?|hurts?|helps?|boosts?|replaces?|changes?|reshapes?|displaces?|alters?|transforms?|eliminates?|disrupts?|limits?|threatens?|undermines?)\b\s*(.+)$/i,
     /^(.+?)\b(?:is|are)\b\s*(.+)$/i,
   ];
   for (const p of patterns) {
     const m = cleaned.match(p);
     if (m && m[1].trim().length >= 2 && m[2].trim().length >= 2) {
       return {
-        subj: m[1].trim().replace(/^(the|a|an)\s+/i, "").toLowerCase(),
-        obj: m[2].trim().replace(/^(the|a|an)\s+/i, "").toLowerCase(),
+        subj: smartLower(m[1].trim().replace(/^(the|a|an)\s+/i, "")),
+        obj: smartLower(m[2].trim().replace(/^(the|a|an)\s+/i, "")),
       };
     }
   }
-  const words = cleaned.split(/\s+/).filter(w => w.length > 2);
+  const skip = /^(will|would|could|should|shall|can|may|might|must|does|did|has|have|had|the|and|but|for|nor|yet|are|was|were|been|being|not|this|that|from|with|into|about|than|also|just|very|much|most|only|over|each|even|well|then|some)$/i;
+  const words = cleaned.split(/\s+/).filter(w => w.length > 2 && !skip.test(w));
   return {
-    subj: words.slice(0, 2).join(" ").toLowerCase(),
-    obj: words.slice(-2).join(" ").toLowerCase(),
+    subj: smartLower(words.slice(0, 2).join(" ")),
+    obj: smartLower(words.slice(-2).join(" ")),
   };
 }
 
@@ -71,9 +77,15 @@ export function generateCounterargument(analysis: AnalysisResult): string {
   const type = classType(analysis.classification);
   const angle = selectAngle(type, derive(s, 7));
   const { subj, obj } = extractNouns(analysis.claim);
-  const objIsClean = obj.length < 40 && !/^(no longer|not|be |more |less |better |worse )/.test(obj);
 
-  const raw = buildCounterargument(subj, obj, objIsClean, type, angle, s);
+  let raw: string;
+  if (isNounLike(subj) && isNounLike(obj)) {
+    const objIsClean = obj.length < 40 && !/^(no longer|not|be |more |less |better |worse )/.test(obj);
+    raw = buildCounterargument(subj, obj, objIsClean, type, angle, s);
+  } else {
+    raw = buildClaimLevelCounterargument(analysis.claim, type, angle, s);
+  }
+
   // Ensure proper capitalization at sentence starts after interpolation
   return raw.replace(/(^|[.!?]\s+)([a-z])/g, (_, pre, ch) => pre + ch.toUpperCase());
 }
@@ -126,7 +138,7 @@ function buildCounterargument(
     if (angle === "friction") {
       return pick([
         `Predictions like this chronically underestimate institutional inertia, regulatory drag, and the speed at which organizations can actually absorb change. The trajectory around ${subj} looks clean on a slide deck, but adoption curves flatten once early adopters are saturated, compliance costs mount, and legacy systems resist integration. The prediction mistakes a phase for a trend.`,
-        `The claim treats the current momentum of ${subj} as self-sustaining, but every wave of technological change generates its own antibodies — labor organizing, regulatory intervention, public backlash, and competitive adaptation. The prediction models the acceleration without modeling the braking forces, which is why forecasts like this one are almost always early.`,
+        `The claim treats the current momentum behind ${subj} as self-sustaining, but every wave of technological change generates its own antibodies — labor organizing, regulatory intervention, public backlash, and competitive adaptation. The prediction models the acceleration without modeling the braking forces, which is why forecasts like this one are almost always early.`,
       ], s, 1);
     }
     if (angle === "scope") {
@@ -213,4 +225,66 @@ function buildCounterargument(
     `Outside the narrow settings where this was first observed, the claimed relationship between ${subj} and ${obj} weakens rapidly. The populations are more varied, the measurements less consistent, and the competing explanations more numerous. What looks like a general truth is closer to a cherry-picked finding with unusually good PR.`,
     `The strongest objection here isn't that the claim is false — it's that it's unfalsifiable as stated. It doesn't specify a timeline, a population, or a measurable threshold for ${obj}. That means it can absorb any counterevidence without adjusting. That's not intellectual confidence; it's definitional evasion.`,
   ], s, 1);
+}
+
+/**
+ * Fallback counterarguments that reference the whole claim instead of
+ * interpolating potentially-malformed subject/object fragments.
+ */
+function buildClaimLevelCounterargument(
+  claim: string,
+  type: ClaimType,
+  angle: AttackAngle,
+  s: number,
+): string {
+  const lc = claim.replace(/[.!?]+$/, "").trim().replace(/^[A-Z]/, c => c.toLowerCase());
+  // Vary how the claim is referenced to avoid repetitive phrasing
+  const ref = pick([
+    `the claim that ${lc}`,
+    `the argument that ${lc}`,
+    `the idea that ${lc}`,
+  ], s, 0);
+
+  if (angle === "causality") {
+    return pick([
+      `What ${ref} presents as cause and effect is more likely a sorting pattern. People with certain pre-existing traits gravitate toward certain behaviors, and those traits — not the behaviors themselves — produce the outcome. Without randomized evidence, the causal story is speculative at best.`,
+      `${ref} treats correlation as mechanism. But the observed pattern likely reflects shared underlying causes — socioeconomic background, self-selection, prior ability — rather than the direct link it implies. Strip out those confounders and the apparent effect shrinks substantially.`,
+      `The causal chain inside ${ref} skips a step. What looks like a direct mechanism is more plausibly an artifact of who self-selects into the described behavior and what other advantages they already carry. The claim credits one factor for outcomes that require an entire ecosystem.`,
+    ], s, 1);
+  }
+  if (angle === "alternative") {
+    return pick([
+      `A more grounded reading of ${ref} would account for the surrounding ecosystem — motivation, access to resources, social reinforcement — rather than crediting a single factor. The claim isolates one variable from a system that doesn't operate that way.`,
+      `The most parsimonious explanation for ${ref} is self-selection, not the mechanism it highlights. People who engage with the described behavior differ systematically from those who don't, and those baseline differences do most of the explanatory work.`,
+    ], s, 2);
+  }
+  if (angle === "selection") {
+    return pick([
+      `${ref} doesn't account for who self-selects into the described behavior. The participants aren't a representative sample — they differ in motivation, prior ability, and circumstances in ways that independently predict the outcome. The conclusion inherits that distortion without correcting for it.`,
+      `The evidence behind ${ref} is shaped by a filtered sample. The observed group was never randomly assigned — it consists of people whose pre-existing characteristics already predict the result. Correct for that selection and the claimed effect contracts sharply.`,
+    ], s, 3);
+  }
+  if (angle === "scope") {
+    return pick([
+      `${ref} extrapolates from narrow or controlled settings to a sweeping conclusion. In practice, competing pressures, inconsistent conditions, and population differences dilute the effect it takes for granted. What survives the lab rarely survives the field at full strength.`,
+      `Outside a handful of favorable conditions, ${ref} loses most of its force. The specificity required for it to hold — consistent measurement, uniform population, controlled context — is exactly what real-world application strips away.`,
+    ], s, 4);
+  }
+  if (angle === "measurement") {
+    return pick([
+      `Whether ${ref} holds depends on how the key terms are defined. The metrics that support it tend to be narrow and short-term. Substitute a more comprehensive, long-range measure and the conclusion shifts — or reverses entirely.`,
+      `The persuasive force of ${ref} rests on definitional choices it never defends. Redefine the outcome — from subjective satisfaction to durable impact, or from short-run gains to compounding effects over a decade — and the verdict may invert.`,
+    ], s, 5);
+  }
+  if (angle === "tradeoff") {
+    return pick([
+      `${ref} resolves its implicit tradeoff too neatly. The costs it minimizes — financial exposure, opportunity loss, institutional friction — don't vanish because the framing omits them. They fall disproportionately on those with the least capacity to absorb the downside.`,
+      `What ${ref} frames as a clear priority is actually a contested value ranking. The resolution it prefers works for people secure enough to absorb the downside, and obscures the cost for those who can't.`,
+    ], s, 6);
+  }
+  // friction
+  return pick([
+    `${ref} underestimates the compounding drag of institutional resistance — regulatory barriers, legacy commitments, organizational inertia, and transition costs that accumulate faster than the claim acknowledges. The trajectory looks clean in theory, but adoption curves flatten once early gains are captured and friction mechanisms engage.`,
+    `Every shift generates its own counterpressures, and ${ref} models only the acceleration. Labor adaptation, regulatory response, public backlash, and competitive adjustment all slow the predicted trajectory in ways it doesn't price in.`,
+  ], s, 7);
 }

@@ -1,3 +1,4 @@
+import { isAre, doesDo } from "./types";
 import type { AnalysisResult, ClaimStructure } from "./types";
 
 function seed(text: string): number {
@@ -21,21 +22,6 @@ function claimTypeFrom(analysis: AnalysisResult): string {
   return "general";
 }
 
-// Subject-verb agreement: "does" for singular, "do" for plural
-function doesDo(subject: string): string {
-  const s = subject.toLowerCase().trim();
-  // Common plural patterns
-  if (/s$/.test(s) && !/ss$|us$|is$/.test(s)) return "do";
-  if (/people|children|workers|employees|companies|meetings|games/.test(s)) return "do";
-  return "does";
-}
-
-function isAre(subject: string): string {
-  const s = subject.toLowerCase().trim();
-  if (/s$/.test(s) && !/ss$|us$|is$/.test(s)) return "are";
-  if (/people|children|workers|employees|companies|meetings|games/.test(s)) return "are";
-  return "is";
-}
 
 export function generateStrongerClaim(claim: string, analysis: AnalysisResult): string {
   const s = seed(claim);

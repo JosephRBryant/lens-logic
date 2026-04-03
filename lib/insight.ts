@@ -1,3 +1,4 @@
+import { isNounLike, smartLower } from "./types";
 import type { AnalysisResult } from "./types";
 
 function seed(text: string): number {
@@ -157,11 +158,33 @@ function detectTension(analysis: AnalysisResult): Tension {
 
   // --- Comparative claims ---
   if (/comparative/.test(classLower)) {
-    return {
-      hinges: "This hinges on whether the things being compared are actually measured on the same terms — a comparison is only as good as the consistency of its yardstick.",
-      breaks: "This breaks if the comparison cherry-picks a timeframe, metric, or population that flatters one side.",
-      holds: "This holds when both sides are measured over the same period, with the same metrics, applied to the same population.",
-    };
+    const raw = extractClaimNouns(analysis.claim);
+    const compBothClean = isNounLike(raw.subject) && isNounLike(raw.outcome);
+    const subject = compBothClean ? raw.subject : "the first option";
+    const outcome = compBothClean ? raw.outcome : "the second option";
+    const s = seed(analysis.claim);
+    return pick([
+      {
+        hinges: `This hinges on whether ${subject} and ${outcome} are being evaluated on the same terms — a comparison is only meaningful if both sides are measured consistently.`,
+        breaks: `This breaks if the comparison cherry-picks a timeframe, metric, or population that flatters one side over the other.`,
+        holds: `This holds when both ${subject} and ${outcome} are measured over the same period, with the same metrics, applied to the same population.`,
+      },
+      {
+        hinges: `This hinges on whether the comparison between ${subject} and ${outcome} uses the same criteria for both sides — shift the yardstick and the ranking may reverse.`,
+        breaks: `This breaks if ${subject} and ${outcome} are being measured on different scales, over different timeframes, or across populations that aren't comparable.`,
+        holds: `This holds when the criteria for evaluating ${subject} and ${outcome} are explicit, consistent, and accepted by both sides of the argument.`,
+      },
+      {
+        hinges: `This hinges on whether the comparison is apples-to-apples — ${subject} and ${outcome} may look straightforward to rank, but only if you hold the measuring stick steady.`,
+        breaks: `This breaks if the framing quietly advantages one side — for instance, by selecting a metric where ${subject} looks strong and ${outcome} looks weak by construction.`,
+        holds: `This holds when someone skeptical of the conclusion would still accept the way ${subject} and ${outcome} were measured and compared.`,
+      },
+      {
+        hinges: `This hinges on whether ${subject} and ${outcome} are genuinely comparable, or whether the comparison flattens important differences between them.`,
+        breaks: `This breaks if the comparison strips away context that would change the ranking — career stage, geography, timeframe, or how success is defined.`,
+        holds: `This holds when the comparison controls for the variables that matter most and both sides would accept the framing as fair.`,
+      },
+    ], s, 0);
   }
 
   // --- Final fallback — detect axis from claim content ---
@@ -175,25 +198,37 @@ function detectTension(analysis: AnalysisResult): Tension {
 function extractClaimNouns(claim: string): { subject: string; outcome: string } {
   const cleaned = claim.replace(/[.!?]+$/, "").trim();
 
+  // Comparative: "X plays a bigger role ... than Y", "X matters more than Y"
+  const compRole = cleaned.match(
+    /^(.+?)\b(?:(?:plays?|has|have|had|makes?|exerts?)\s+(?:a\s+)?(?:bigger|smaller|larger|greater|lesser|more\s+\w+|less\s+\w+)\s+(?:role|impact|influence|effect|part|contribution)(?:\s+(?:in|on|to|for)\s+\S+(?:\s+\S+)*)?\s+than)\s+(.+)$/i
+  ) || cleaned.match(
+    /^(.+?)\b(?:(?:matters?|counts?|contributes?|weighs?)\s+(?:more|less)(?:\s+(?:in|to|for)\s+\S+(?:\s+\S+)*)?\s+than)\s+(.+)$/i
+  );
+  if (compRole) {
+    const a = smartLower(compRole[1].trim().replace(/^(the|a|an)\s+/i, ""));
+    const b = smartLower(compRole[2].trim().replace(/^(the|a|an)\s+/i, ""));
+    return { subject: a, outcome: b };
+  }
+
   // Normative comparisons: "X should be prioritized over Y", "X should matter more than Y"
   const normComp = cleaned.match(
     /^(.+?)\b(?:should|must|ought to)\b\s+(?:be\s+)?(?:prioritized|valued|preferred|chosen|favored|weighed)\s+(?:over|above|more than|against)\s+(.+)$/i
   );
   if (normComp) {
-    const a = normComp[1].trim().replace(/^(the|a|an)\s+/i, "").toLowerCase();
-    const b = normComp[2].trim().replace(/^(the|a|an)\s+/i, "").toLowerCase();
+    const a = smartLower(normComp[1].trim().replace(/^(the|a|an)\s+/i, ""));
+    const b = smartLower(normComp[2].trim().replace(/^(the|a|an)\s+/i, ""));
     return { subject: a, outcome: b };
   }
 
-  // "X should matter more than Y", "X is more important than Y"
+  // "X should matter more than Y", "X is/are more important than Y", "X is/are better than Y"
   const moreComp = cleaned.match(
     /^(.+?)\b(?:should\s+)?(?:matter|count|rank|weigh)\s+more\s+than\s+(.+)$/i
   ) || cleaned.match(
-    /^(.+?)\bis\s+(?:more\s+important|more\s+valuable|better|worse|greater)\s+than\s+(.+)$/i
+    /^(.+?)\b(?:is|are)\s+(?:more\s+\w+|less\s+\w+|better|worse|bigger|smaller|greater|fewer|higher|lower|faster|slower|harder|easier|stronger|weaker)\b[^.!?]*?\bthan\s+(.+)$/i
   );
   if (moreComp) {
-    const a = moreComp[1].trim().replace(/^(the|a|an)\s+/i, "").toLowerCase();
-    const b = moreComp[2].trim().replace(/^(the|a|an)\s+/i, "").toLowerCase();
+    const a = smartLower(moreComp[1].trim().replace(/^(the|a|an)\s+/i, ""));
+    const b = smartLower(moreComp[2].trim().replace(/^(the|a|an)\s+/i, ""));
     return { subject: a, outcome: b };
   }
 
@@ -202,8 +237,8 @@ function extractClaimNouns(claim: string): { subject: string; outcome: string } 
     /^(.+?)\bshould\s+(?:prioritize|value|prefer|choose|focus on)\s+(.+?)\s+over\s+(.+)$/i
   );
   if (shouldVerb) {
-    const b = shouldVerb[2].trim().replace(/^(the|a|an)\s+/i, "").toLowerCase();
-    const c = shouldVerb[3].trim().replace(/^(the|a|an)\s+/i, "").toLowerCase();
+    const b = smartLower(shouldVerb[2].trim().replace(/^(the|a|an)\s+/i, ""));
+    const c = smartLower(shouldVerb[3].trim().replace(/^(the|a|an)\s+/i, ""));
     return { subject: b, outcome: c };
   }
 
@@ -212,16 +247,16 @@ function extractClaimNouns(claim: string): { subject: string; outcome: string } 
     /^(.+?)\b(improves?|reduces?|increases?|affects?|causes?|creates?|makes?|drives?|produces?|ruins?|destroys?|hurts?|helps?|boosts?|lowers?|prevents?)\b\s*(.+)$/i
   );
   if (causal && causal[1].trim().length > 2 && causal[3].trim().length > 2) {
-    const subj = causal[1].trim().replace(/^(the|a|an)\s+/i, "").toLowerCase();
-    const obj = causal[3].trim().replace(/^(the|a|an)\s+/i, "").toLowerCase();
+    const subj = smartLower(causal[1].trim().replace(/^(the|a|an)\s+/i, ""));
+    const obj = smartLower(causal[3].trim().replace(/^(the|a|an)\s+/i, ""));
     return { subject: subj, outcome: obj };
   }
 
   // Linking verbs: "X is Y"
   const linking = cleaned.match(/^(.+?)\b(is|are|will|can)\b\s*(.+)$/i);
   if (linking && linking[1].trim().length > 2 && linking[3].trim().length > 2) {
-    const subj = linking[1].trim().replace(/^(the|a|an)\s+/i, "").toLowerCase();
-    const obj = linking[3].trim().replace(/^(the|a|an)\s+/i, "").toLowerCase();
+    const subj = smartLower(linking[1].trim().replace(/^(the|a|an)\s+/i, ""));
+    const obj = smartLower(linking[3].trim().replace(/^(the|a|an)\s+/i, ""));
     return { subject: subj, outcome: obj };
   }
 
@@ -230,13 +265,16 @@ function extractClaimNouns(claim: string): { subject: string; outcome: string } 
     !/^(the|a|an|is|are|was|were|will|should|must|can|do|does|not|and|or|but|for|to|in|on|at|of|by|with)$/i.test(w)
   );
   return {
-    subject: words.slice(0, 2).join(" ").toLowerCase() || "the claimed cause",
-    outcome: words.slice(-2).join(" ").toLowerCase() || "the expected outcome",
+    subject: smartLower(words.slice(0, 2).join(" ")) || "the claimed cause",
+    outcome: smartLower(words.slice(-2).join(" ")) || "the expected outcome",
   };
 }
 
 function buildAxisFallback(analysis: AnalysisResult, claimType: string): Tension {
-  const { subject, outcome } = extractClaimNouns(analysis.claim);
+  const raw = extractClaimNouns(analysis.claim);
+  const bothClean = isNounLike(raw.subject) && isNounLike(raw.outcome);
+  const subject = bothClean ? raw.subject : "the described factor";
+  const outcome = bothClean ? raw.outcome : "the stated outcome";
   const s = seed(analysis.claim);
   const claimLower = analysis.claim.toLowerCase();
 

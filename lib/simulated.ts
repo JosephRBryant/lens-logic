@@ -1,3 +1,4 @@
+import { isNounLike, isAre, smartLower } from "./types";
 import type { AnalysisResult, ClaimTraits, ClaimStructure } from "./types";
 
 // Simple seeded variation based on claim text — deterministic per input but varied across inputs
@@ -29,12 +30,12 @@ function isTooLong(phrase: string): boolean {
 }
 
 function safeSubj(raw: string, s: number): string {
-  if (!isTooLong(raw)) return raw;
+  if (!isTooLong(raw) && isNounLike(raw)) return raw;
   return pick(["the claim", "this position", "the arrangement described", "the approach in question"], s, 0);
 }
 
 function safeObj(raw: string, s: number): string {
-  if (!isTooLong(raw)) return raw;
+  if (!isTooLong(raw) && isNounLike(raw)) return raw;
   return pick(["the outcome in question", "the expected result", "the effects being discussed", "the goals at stake"], s, 1);
 }
 
@@ -48,12 +49,12 @@ export function analyzeClaimSimulated(
   const obj = safeObj(structure.object, s);
 
   // Short raw subject for variable naming — first few noun words from the subject, stripped of verbs
-  const rawSubjShort = structure.subject
+  const rawSubjShort = smartLower(structure.subject
     .split(/\s+/)
     .filter(w => !/^(is|are|was|were|makes?|does|has|have|should|must|will|can|could|would|be|been|being)$/i.test(w))
     .slice(0, 3)
     .join(" ")
-    .toLowerCase() || structure.subject.split(/\s+/).slice(0, 2).join(" ").toLowerCase();
+  ) || smartLower(structure.subject.split(/\s+/).slice(0, 2).join(" "));
 
   const classification = simulateClassification(traits, s);
   const assumptions = simulateAssumptions(claim, traits, subj, obj, s);
@@ -107,7 +108,7 @@ function simulateAssumptions(
 
   if (traits.isCausal) {
     pool.push([
-      `This takes for granted that ${subj} is a meaningful driver of ${obj}, rather than a minor or incidental factor.`,
+      `This takes for granted that ${subj} ${isAre(subj)} a meaningful driver of ${obj}, rather than a minor or incidental factor.`,
       `There's an embedded assumption that the relationship between ${subj} and ${obj} is causal, not merely coincidental.`,
       `The claim presupposes that changes in ${subj} reliably produce changes in ${obj}.`,
       `It treats ${subj} as the active ingredient, but there may be deeper causes at play.`,
@@ -119,7 +120,7 @@ function simulateAssumptions(
       `The prediction assumes that conditions driving ${subj} today will persist long enough for the forecast to play out.`,
       `It takes for granted that we can extrapolate from current trends involving ${subj} to future outcomes.`,
       `There's an implicit assumption about the timeline — how fast or slow changes around ${subj} will unfold.`,
-      `The forecast leans on the idea that no major disruption will alter the trajectory of ${subj}.`,
+      `The forecast leans on the idea that no major disruption will alter the trajectory around ${subj}.`,
     ]);
   }
 
@@ -244,8 +245,10 @@ function simulateVariables(traits: ClaimTraits, subj: string, s: number, rawSubj
   if (traits.isCausal && pool.length < 4) {
     pool.push(`Whether something other than ${varSubj} is actually driving the observed effect`);
   }
-  if (traits.isPredictive && pool.length < 4) {
-    pool.push("The actual timeline — predictions without dates are hard to evaluate");
+  if (traits.isPredictive) {
+    if (pool.length < 5) pool.push(`Whether the current pace of change around ${varSubj} is accelerating or leveling off`);
+    if (pool.length < 5) pool.push(`Institutional and regulatory resistance that could slow or redirect ${varSubj}`);
+    if (pool.length < 5) pool.push(`How far along adoption of ${varSubj} actually is in practice — early hype often outpaces deployment`);
   }
   if (traits.hasNumbers) {
     pool.push("Data source reliability, sample size, and methodology");
@@ -287,12 +290,12 @@ function simulatePerspectives(
 
   if (traits.isCausal) {
     const causalFor = [
-      `People who've seen ${subj} work firsthand may find this claim obvious — their experience backs it up.`,
+      `Those with firsthand experience of ${subj} may find this claim obvious — their observations back it up.`,
       `Research in this area does suggest a meaningful link, giving the claim some empirical footing.`,
       `Proponents would point to concrete examples where ${subj} measurably changed ${obj}.`,
     ];
     const causalAgainst = [
-      `Skeptics would note that ${obj} is shaped by many factors, and singling out ${subj} oversimplifies things.`,
+      `Skeptics would note that ${obj} ${isAre(obj)} shaped by many factors, and singling out ${subj} oversimplifies things.`,
       `The relationship might be correlational — both sides could be driven by something else entirely.`,
       `Critics might argue that the evidence doesn't hold consistently across different contexts.`,
     ];

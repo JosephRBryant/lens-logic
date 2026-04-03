@@ -1,11 +1,12 @@
+import { isNounLike, isAre, smartLower } from "./types";
 import type { ClaimTraits, ClaimStructure } from "./types";
 
 export function detectTraits(claim: string): ClaimTraits {
   return {
-    isCausal: /\b(cause[sd]?|because|leads? to|results? in|due to|therefore|improves?|reduces?|increases?|affects?|drives?|creates?|produces?)\b/i.test(claim),
+    isCausal: /\b(cause[sd]?|because|leads? to|results? in|due to|therefore|improves?|reduces?|increases?|affects?|drives?|creates?|produces?|makes?|when)\b/i.test(claim),
     isPredictive: /\b(will|going to|predict|expect|likely|inevitabl[ey]|soon|future|replace|trend|forecast)\b/i.test(claim),
     isNormative: /\b(should|must|ought|need to|have to|wrong|right|better off|moral|no longer|worth)\b/i.test(claim),
-    isComparative: /\b(more|less|better|worse|higher|lower|greater|fewer|compared|than)\b/i.test(claim),
+    isComparative: /\b(more|less|better|worse|bigger|smaller|greater|fewer|higher|lower)\b[^.!?]*\bthan\b|\bcompared\s+(to|with)\b/i.test(claim),
     isAbsolute: /\b(always|never|every|all|none|no one|everyone|nobody|most|any)\b/i.test(claim),
     hasTradeoff: /\b(but|however|although|though|while|on the other hand|yet|despite|nevertheless|tradeoff|trade-off)\b/i.test(claim),
     isShort: claim.length < 50,
@@ -28,6 +29,9 @@ export function extractClaimStructure(claim: string): ClaimStructure {
   // Relation patterns ordered from most specific (multi-word) to least.
   // Each pattern captures everything before it as subject, and everything after as object.
   const relationPatterns: RegExp[] = [
+    // Comparative patterns: "X plays a bigger role in Y than Z", "X matters more than Z"
+    /^(.+?)\b((?:plays?|has|have|had|makes?|exerts?)\s+(?:a\s+)?(?:bigger|smaller|larger|greater|lesser|more\s+\w+|less\s+\w+)\s+(?:role|impact|influence|effect|part|contribution)(?:\s+(?:in|on|to|for)\s+\S+(?:\s+\S+)*)?\s+than)\s+(.+)$/i,
+    /^(.+?)\b((?:matters?|counts?|contributes?|weighs?)\s+(?:more|less)(?:\s+(?:in|to|for)\s+\S+(?:\s+\S+)*)?\s+than)\s+(.+)$/i,
     // Multi-word verb phrases
     /^(.+?)\b(will not|won't|cannot|can't|does not|doesn't|is no longer|are no longer)\b\s*(.*?)$/i,
     /^(.+?)\b(will (?:likely |probably )?(?:replace|improve|reduce|increase|affect|drive|create|produce|cause|lead to|result in|change|transform|eliminate|disrupt|enable|prevent|destroy|hurt|help|boost|lower|raise|undermine|strengthen|weaken))\b\s*(.*?)$/i,
@@ -49,12 +53,19 @@ export function extractClaimStructure(claim: string): ClaimStructure {
       const rawObject = match[3].trim();
 
       // Clean minor leading/trailing articles and prepositions from subject/object
-      const subject = cleanNounPhrase(rawSubject);
-      const object = cleanNounPhrase(rawObject);
+      const rawSubjClean = cleanNounPhrase(rawSubject);
+      const rawObjClean = cleanNounPhrase(rawObject);
 
       // Only accept if both subject and object are non-trivial
-      if (subject.length >= 2 && object.length >= 2) {
-        const concepts = [subject, object].filter(Boolean);
+      if (rawSubjClean.length >= 2 && rawObjClean.length >= 2) {
+        // Guard against sentence fragments that read badly in templates.
+        // If EITHER side is a fragment, both fall back to generic labels so
+        // downstream templates never get a misleading half-real pair like
+        // "effect of people on the stated outcome".
+        const bothClean = isNounLike(rawSubjClean) && isNounLike(rawObjClean);
+        const subject = bothClean ? rawSubjClean : "the described factor";
+        const object = bothClean ? rawObjClean : "the stated outcome";
+        const concepts = [rawSubjClean, rawObjClean].filter(Boolean);
         return { subject, relation, object, concepts };
       }
     }
@@ -62,22 +73,26 @@ export function extractClaimStructure(claim: string): ClaimStructure {
 
   // Fallback: no clear relation found. Return generic structure.
   const fallbackConcepts = extractFallbackConcepts(cleaned);
+  const fbSubj = fallbackConcepts[0] || "";
+  const fbObj = fallbackConcepts[1] || "";
+  const fbBothClean = !!(fbSubj && fbObj && isNounLike(fbSubj) && isNounLike(fbObj));
   return {
-    subject: fallbackConcepts[0] || "the described factor",
+    subject: fbBothClean ? fbSubj : "the described factor",
     relation: "",
-    object: fallbackConcepts[1] || "the stated outcome",
+    object: fbBothClean ? fbObj : "the stated outcome",
     concepts: fallbackConcepts,
   };
 }
 
 function cleanNounPhrase(phrase: string): string {
-  return phrase
-    // Remove leading articles/prepositions
-    .replace(/^(the|a|an|that|this|its|their|our|your|his|her)\s+/i, "")
-    // Remove trailing conjunctions or dangling prepositions
-    .replace(/\s+(and|or|but|for|to|in|on|at|of|by|with)$/i, "")
-    .trim()
-    .toLowerCase();
+  return smartLower(
+    phrase
+      // Remove leading articles/prepositions
+      .replace(/^(the|a|an|that|this|its|their|our|your|his|her)\s+/i, "")
+      // Remove trailing conjunctions or dangling prepositions
+      .replace(/\s+(and|or|but|for|to|in|on|at|of|by|with)$/i, "")
+      .trim()
+  );
 }
 
 function extractFallbackConcepts(text: string): string[] {
@@ -99,7 +114,7 @@ function extractFallbackConcepts(text: string): string[] {
     const lower = word.toLowerCase().replace(/[,;:]/g, "");
     if (stopWords.has(lower) || lower.length < 2) {
       if (current.length > 0) {
-        phrases.push(current.join(" ").toLowerCase());
+        phrases.push(smartLower(current.join(" ")));
         current = [];
       }
     } else {
@@ -107,7 +122,7 @@ function extractFallbackConcepts(text: string): string[] {
     }
   }
   if (current.length > 0) {
-    phrases.push(current.join(" ").toLowerCase());
+    phrases.push(smartLower(current.join(" ")));
   }
 
   // Return first 3 in order of appearance (not sorted by length)
@@ -150,7 +165,7 @@ export function extractAssumptions(claim: string, traits: ClaimTraits, structure
     if (traits.domainWork || traits.domainProductivity) {
       assumptions.push(`It assumes ${subject} directly affects ${object}, independent of management, culture, or role type.`);
     } else if (traits.domainHealth) {
-      assumptions.push(`It assumes ${subject} has a direct health effect on ${object}, controlling for genetics, lifestyle, and environment.`);
+      assumptions.push(`It assumes ${subject} ${isAre(subject) === "are" ? "have" : "has"} a direct health effect on ${object}, controlling for genetics, lifestyle, and environment.`);
     } else if (traits.domainTech) {
       assumptions.push(`It assumes ${subject} works as described and is adopted widely enough to produce the claimed effect on ${object}.`);
     } else {
@@ -180,7 +195,7 @@ export function extractAssumptions(claim: string, traits: ClaimTraits, structure
     } else if (traits.domainEcon) {
       assumptions.push(`It assumes economic cost or benefit is the primary criterion for evaluating ${subject}.`);
     } else {
-      assumptions.push(`It assumes a shared value framework for judging whether ${subject} is right, good, or worthwhile.`);
+      assumptions.push(`It assumes a shared value framework for judging whether ${subject} ${isAre(subject)} right, good, or worthwhile.`);
     }
     assumptions.push(`It assumes the criteria for judging ${subject} are clear and agreed upon.`);
   }
@@ -238,6 +253,7 @@ export function extractAssumptions(claim: string, traits: ClaimTraits, structure
 export function identifyVariables(claim: string, traits: ClaimTraits, structure: ClaimStructure): string[] {
   const variables: string[] = [];
   const subject = structure.subject;
+  const object = structure.object;
 
   // Domain-specific variables
   if (traits.domainWork) {
@@ -282,8 +298,21 @@ export function identifyVariables(claim: string, traits: ClaimTraits, structure:
   if (traits.isCausal && variables.length < 4) {
     variables.push(`Potential confounding factors not mentioned in the claim about ${subject}`);
   }
-  if (traits.isPredictive && variables.length < 4) {
-    variables.push(`Timeline and pace of change for ${subject}`);
+  if (traits.isPredictive) {
+    // Predictions hinge on pace, resistance, and scope — add these regardless of
+    // domain because domain variables alone often miss what makes a prediction fragile.
+    if (variables.length < 5) {
+      variables.push(`Whether the current trajectory of ${subject} is compounding or approaching a ceiling`);
+    }
+    if (variables.length < 5) {
+      variables.push(`Institutional, regulatory, or cultural resistance that could slow or redirect ${subject}`);
+    }
+    if (variables.length < 5 && object !== "the stated outcome") {
+      variables.push(`Whether "${object}" means full displacement or gradual restructuring — the scope changes the timeline`);
+    }
+    if (variables.length < 5) {
+      variables.push(`Cost, infrastructure, and accessibility barriers to widespread adoption of ${subject}`);
+    }
   }
   if (traits.isComparative && variables.length < 4) {
     variables.push(`Selection of comparison groups and metrics for evaluating ${subject}`);
@@ -319,7 +348,7 @@ export function evaluatePerspectives(claim: string, traits: ClaimTraits, structu
       perspectives.push(`Critics may argue that ${object} depends on too many variables to attribute to ${subject} alone.`);
     } else if (traits.domainHealth) {
       perspectives.push(`Proponents may point to clinical or epidemiological evidence supporting the link between ${subject} and ${object}.`);
-      perspectives.push(`Skeptics may note that ${object} is multi-factorial and hard to attribute to ${subject} alone.`);
+      perspectives.push(`Skeptics may note that ${object} ${isAre(object)} multi-factorial and hard to attribute to ${subject} alone.`);
     } else if (traits.domainTech) {
       perspectives.push(`Advocates may cite early data showing ${subject}'s effect on ${object}.`);
       perspectives.push(`Critics may argue ${subject}'s effect is context-dependent and doesn't generalize.`);
